@@ -1,0 +1,177 @@
+name: Build and Release
+
+on:
+  push:
+    branches:
+      - 'version-*'      # version-1.0.0, version-1.1.0, etc.
+      - 'release/*'      # release/1.0.0, release/1.1.0, etc.
+    tags:
+      - 'v*'             # v1.0.0, v1.1.0, etc. (alternative method)
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build binaries
+    runs-on: ubuntu-latest
+    
+    strategy:
+      matrix:
+        include:
+          - goos: linux
+            goarch: amd64
+            binary_name: fail2ban_exporter
+          - goos: windows
+            goarch: amd64
+            binary_name: fail2ban_exporter.exe
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Fetch all history for tags
+    
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+    
+      - name: Get version from branch or tag
+        id: get_version
+        run: |
+          # Extract version from branch name (version-1.0.0 or release/1.0.0)
+          if [[ "${{ github.ref }}" == refs/heads/version-* ]]; then
+            VERSION=${GITHUB_REF#refs/heads/version-}
+          elif [[ "${{ github.ref }}" == refs/heads/release/* ]]; then
+            VERSION=${GITHUB_REF#refs/heads/release/}
+          # Extract version from tag (v1.0.0)
+          elif [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            VERSION=${GITHUB_REF#refs/tags/v}
+          # Manual dispatch - try to get from branch or use default
+          elif [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            BRANCH=${GITHUB_REF#refs/heads/}
+            if [[ "$BRANCH" == version-* ]]; then
+              VERSION=${BRANCH#version-}
+            elif [[ "$BRANCH" == release/* ]]; then
+              VERSION=${BRANCH#release/}
+            else
+              VERSION="dev"
+            fi
+          else
+            VERSION="dev"
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Version: $VERSION"
+    
+      - name: Get commit hash
+        id: get_commit
+        run: |
+          COMMIT=$(git rev-parse --short HEAD)
+          echo "commit=$COMMIT" >> $GITHUB_OUTPUT
+    
+      - name: Build binary
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: 0
+        run: |
+          go build \
+            -ldflags "\
+              -X main.version=${{ steps.get_version.outputs.version }} \
+              -X main.commit=${{ steps.get_commit.outputs.commit }} \
+              -X main.date=$(date -u +"%Y-%m-%dT%H:%M:%SZ") \
+              -X main.builtBy=github-actions \
+            " \
+            -o ${{ matrix.binary_name }} \
+            exporter.go
+    
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.goos }}-${{ matrix.goarch }}
+          path: ${{ matrix.binary_name }}
+          retention-days: 30
+
+  release:
+    name: Create Release
+    needs: build
+    runs-on: ubuntu-latest
+    # Only create release for version branches or tags (not manual dispatch without version)
+    if: |
+      startsWith(github.ref, 'refs/heads/version-') ||
+      startsWith(github.ref, 'refs/heads/release/') ||
+      startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: write
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+    
+      - name: Get version from branch or tag
+        id: get_version
+        run: |
+          # Extract version from branch name (version-1.0.0 or release/1.0.0)
+          if [[ "${{ github.ref }}" == refs/heads/version-* ]]; then
+            VERSION=${GITHUB_REF#refs/heads/version-}
+          elif [[ "${{ github.ref }}" == refs/heads/release/* ]]; then
+            VERSION=${GITHUB_REF#refs/heads/release/}
+          # Extract version from tag (v1.0.0)
+          elif [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            VERSION=${GITHUB_REF#refs/tags/v}
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "ref=${{ github.ref_name }}" >> $GITHUB_OUTPUT
+          
+          # Determine which changelog to reference
+          if [[ "$VERSION" == *"beta"* ]] || [[ "$VERSION" == *"rc"* ]] || [[ "$VERSION" == *"alpha"* ]]; then
+            CHANGELOG="CHANGELOG-BETA.md"
+          else
+            CHANGELOG="CHANGELOG.md"
+          fi
+          echo "changelog=$CHANGELOG" >> $GITHUB_OUTPUT
+    
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+    
+      - name: Create checksums
+        run: |
+          cd artifacts
+          for dir in */; do
+            cd "$dir"
+            for file in *; do
+              if [ -f "$file" ]; then
+                sha256sum "$file" > "${file}.sha256"
+              fi
+            done
+            cd ..
+          done
+    
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Release ${{ steps.get_version.outputs.version }}
+          body: |
+            ## Release ${{ steps.get_version.outputs.version }}
+            
+            ### Changes
+            See [${{ steps.get_version.outputs.changelog }}](https://github.com/${{ github.repository }}/blob/${{ steps.get_version.outputs.ref }}/${{ steps.get_version.outputs.changelog }}) for details
+            
+            ### Downloads
+            - **Linux (amd64)**: `fail2ban_exporter`
+            - **Windows (amd64)**: `fail2ban_exporter.exe`
+            
+            ### Installation
+            ```bash
+            # Linux
+            chmod +x fail2ban_exporter
+            ./fail2ban_exporter --version
+            ```
+          files: |
+            artifacts/**/*
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+

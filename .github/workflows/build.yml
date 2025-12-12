@@ -1,0 +1,85 @@
+name: Build and Test
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  test:
+    name: Run tests
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+      
+      - name: Download dependencies
+        run: go mod download
+      
+      - name: Run tests
+        run: go test ./... -v
+      
+      - name: Run vet
+        run: go vet ./...
+      
+      - name: Check formatting
+        run: |
+          if [ "$(gofmt -l .)" ]; then
+            echo "Code is not formatted. Run 'go fmt ./...'"
+            gofmt -d .
+            exit 1
+          fi
+
+  build:
+    name: Build binaries
+    runs-on: ubuntu-latest
+    
+    strategy:
+      matrix:
+        include:
+          - goos: linux
+            goarch: amd64
+            binary_name: fail2ban_exporter
+          - goos: windows
+            goarch: amd64
+            binary_name: fail2ban_exporter.exe
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+      
+      - name: Build binary
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: 0
+        run: |
+          go build \
+            -ldflags "\
+              -X main.version=dev \
+              -X main.commit=$(git rev-parse --short HEAD) \
+              -X main.date=$(date -u +"%Y-%m-%dT%H:%M:%SZ") \
+              -X main.builtBy=github-actions \
+            " \
+            -o ${{ matrix.binary_name }} \
+            exporter.go
+      
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.goos }}-${{ matrix.goarch }}
+          path: ${{ matrix.binary_name }}
+          retention-days: 7
+
