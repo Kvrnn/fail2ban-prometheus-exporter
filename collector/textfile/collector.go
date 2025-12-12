@@ -3,8 +3,8 @@ package textfile
 import (
 	"log"
 
-	"github.com/prometheus/client_golang/prometheus"
 	"github.com/Kvrnn/fail2ban-prometheus-exporter/cfg"
+	"github.com/prometheus/client_golang/prometheus"
 )
 
 type Collector struct {

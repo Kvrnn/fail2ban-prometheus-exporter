@@ -4,10 +4,10 @@ import (
 	"log"
 	"os"
 
-	"github.com/prometheus/client_golang/prometheus"
 	"github.com/Kvrnn/fail2ban-prometheus-exporter/cfg"
 	"github.com/Kvrnn/fail2ban-prometheus-exporter/geo"
 	"github.com/Kvrnn/fail2ban-prometheus-exporter/socket"
+	"github.com/prometheus/client_golang/prometheus"
 )
 
 type Collector struct {
@@ -41,7 +41,7 @@ func NewExporter(appSettings *cfg.AppSettings, exporterVersion string) *Collecto
 		socketConnectionErrorCount: 0,
 		socketRequestErrorCount:    0,
 		exitOnSocketConnError:      appSettings.ExitOnSocketConnError,
-		geoEnabled:                  appSettings.Geo.Enabled,
+		geoEnabled:                 appSettings.Geo.Enabled,
 	}
 
 	// Initialize geo provider if enabled

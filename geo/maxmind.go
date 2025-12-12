@@ -86,4 +86,3 @@ func (p *MaxMindProvider) Annotate(ip string) map[string]string {
 func (p *MaxMindProvider) GetLabels() []string {
 	return []string{"city", "latitude", "longitude", "country", "country_code"}
 }
-

@@ -9,4 +9,3 @@ type Provider interface {
 	// GetLabels returns the list of label names this provider will return
 	GetLabels() []string
 }
-

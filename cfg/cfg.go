@@ -5,8 +5,8 @@ import (
 	"log"
 	"os"
 
-	"github.com/alecthomas/kong"
 	"github.com/Kvrnn/fail2ban-prometheus-exporter/auth"
+	"github.com/alecthomas/kong"
 )
 
 var cliStruct struct {
