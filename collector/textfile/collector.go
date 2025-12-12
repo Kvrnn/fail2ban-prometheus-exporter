@@ -4,7 +4,7 @@ import (
 	"log"
 
 	"github.com/prometheus/client_golang/prometheus"
-	"gitlab.com/hctrdev/fail2ban-prometheus-exporter/cfg"
+	"github.com/Kvrnn/fail2ban-prometheus-exporter/cfg"
 )
 
 type Collector struct {

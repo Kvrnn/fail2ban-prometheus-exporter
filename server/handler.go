@@ -5,8 +5,8 @@ import (
 	"net/http"
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"gitlab.com/hctrdev/fail2ban-prometheus-exporter/collector/f2b"
-	"gitlab.com/hctrdev/fail2ban-prometheus-exporter/collector/textfile"
+	"github.com/Kvrnn/fail2ban-prometheus-exporter/collector/f2b"
+	"github.com/Kvrnn/fail2ban-prometheus-exporter/collector/textfile"
 )
 
 const (
