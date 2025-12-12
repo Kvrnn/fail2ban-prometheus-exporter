@@ -18,6 +18,7 @@ type JailStats struct {
 	FailedTotal   int
 	BannedCurrent int
 	BannedTotal   int
+	BannedIPList  string // Comma-separated list of banned IPs
 }
 
 func ConnectToSocket(path string) (*Fail2BanSocket, error) {
@@ -80,6 +81,7 @@ func (s *Fail2BanSocket) GetJailStats(jail string) (JailStats, error) {
 		FailedTotal:   -1,
 		BannedCurrent: -1,
 		BannedTotal:   -1,
+		BannedIPList:  "",
 	}
 
 	if lvl1, ok := response.(*types.Tuple); ok {
@@ -110,6 +112,14 @@ func (s *Fail2BanSocket) GetJailStats(jail string) (JailStats, error) {
 							stats.BannedTotal = actionsTotal
 						}
 					}
+					// The banned IP list is typically the 3rd element in the actions list
+					if len(*actionsLvl1) > 2 {
+						if bannedIPListTuple, ok := actionsLvl1.Get(2).(*types.Tuple); ok {
+							if bannedIPList, ok := bannedIPListTuple.Get(1).(string); ok {
+								stats.BannedIPList = bannedIPList
+							}
+						}
+					}
 				}
 			}
 			return stats, nil
@@ -131,6 +141,30 @@ func (s *Fail2BanSocket) GetJailFindTime(jail string) (int, error) {
 func (s *Fail2BanSocket) GetJailMaxRetries(jail string) (int, error) {
 	command := fmt.Sprintf(maxRetriesCommandFmt, jail)
 	return s.sendSimpleIntCommand(command)
+}
+
+// GetBannedIPs retrieves the list of currently banned IPs for a jail from the socket
+func (s *Fail2BanSocket) GetBannedIPs(jail string) ([]string, error) {
+	stats, err := s.GetJailStats(jail)
+	if err != nil {
+		return nil, err
+	}
+
+	if stats.BannedIPList == "" {
+		return []string{}, nil
+	}
+
+	// Parse comma-separated IP list
+	ips := strings.Split(stats.BannedIPList, ",")
+	var result []string
+	for _, ip := range ips {
+		ip = strings.TrimSpace(ip)
+		if ip != "" {
+			result = append(result, ip)
+		}
+	}
+
+	return result, nil
 }
 
 func (s *Fail2BanSocket) GetServerVersion() (string, error) {

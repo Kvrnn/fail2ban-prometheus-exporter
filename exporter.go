@@ -8,14 +8,14 @@ import (
 	"syscall"
 
 	"github.com/prometheus/client_golang/prometheus"
-	"gitlab.com/hctrdev/fail2ban-prometheus-exporter/cfg"
-	"gitlab.com/hctrdev/fail2ban-prometheus-exporter/collector/f2b"
-	"gitlab.com/hctrdev/fail2ban-prometheus-exporter/collector/textfile"
-	"gitlab.com/hctrdev/fail2ban-prometheus-exporter/server"
+	"github.com/Kvrnn/fail2ban-prometheus-exporter/cfg"
+	"github.com/Kvrnn/fail2ban-prometheus-exporter/collector/f2b"
+	"github.com/Kvrnn/fail2ban-prometheus-exporter/collector/textfile"
+	"github.com/Kvrnn/fail2ban-prometheus-exporter/server"
 )
 
 var (
-	version = "dev"
+	version = "1.0.0"
 	commit  = "none"
 	date    = "unknown"
 	builtBy = "unknown"
