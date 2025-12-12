@@ -1,9 +1,6 @@
 # Fail2Ban Prometheus Exporter
 
-[![Pipeline](https://gitlab.com/hctrdev/fail2ban-prometheus-exporter/badges/main/pipeline.svg)](https://gitlab.com/hctrdev/fail2ban-prometheus-exporter)
-[![Go Report Card](https://goreportcard.com/badge/gitlab.com/hctrdev/fail2ban-prometheus-exporter)](https://goreportcard.com/report/gitlab.com/hctrdev/fail2ban-prometheus-exporter)
-
-Collect metrics from a running fail2ban instance.
+Collect metrics from a running fail2ban instance with optional geo-tagging support.
 
 ## Table of Contents
 1. Quick Start
@@ -31,7 +28,7 @@ $ fail2ban_exporter --collector.f2b.socket=/var/run/fail2ban/fail2ban.sock --web
 2022/02/20 09:54:06 ready
 ```
 
-Binary files for each release can be found on the [releases](https://gitlab.com/hctrdev/fail2ban-prometheus-exporter/-/releases) page.
+Binary files for each release can be found on the [releases](https://github.com/Kvrnn/fail2ban-prometheus-exporter/releases) page.
 
 There is also an [example systemd service file](/_examples/systemd/fail2ban_exporter.service) included in the repository.
 This is a starting point to run the exporter as a service.
@@ -44,7 +41,7 @@ docker run -d \
     --name "fail2ban-exporter" \
     -v /var/run/fail2ban:/var/run/fail2ban:ro \
     -p "9191:9191" \
-    registry.gitlab.com/hctrdev/fail2ban-prometheus-exporter:latest
+    ghcr.io/Kvrnn/fail2ban-prometheus-exporter:latest
 ```
 
 **Docker compose**
@@ -53,7 +50,7 @@ docker run -d \
 version: "2"
 services:
   exporter:
-    image: registry.gitlab.com/hctrdev/fail2ban-prometheus-exporter:latest
+    image: ghcr.io/Kvrnn/fail2ban-prometheus-exporter:latest
     volumes:
     - /var/run/fail2ban/:/var/run/fail2ban:ro
     ports:
@@ -61,11 +58,9 @@ services:
 ```
 
 Use the `:latest` tag to get the latest stable release.
-See the [registry page](https://gitlab.com/hctrdev/fail2ban-prometheus-exporter/container_registry) for all available tags.
 
 **NOTE:** While it is possible to mount the `fail2ban.sock` file directly, it is recommended to mount the parent folder instead.
 The `.sock` file is deleted by fail2ban on shutdown and re-created on startup and this causes problems for the docker mount.
-See [this reply](https://gitlab.com/hctrdev/fail2ban-prometheus-exporter/-/issues/11#note_665003499) for more details.
 
 ## 2. Metrics
 
@@ -75,19 +70,20 @@ The exporter exposes the following metrics:
 
 | Metric                       | Description                                                                        | Example                                             |
 |------------------------------|------------------------------------------------------------------------------------|-----------------------------------------------------|
-| `up`                         | Returns 1 if the exporter is up and running                                        | `f2b_up 1`                                          |
+| `up`                         | Returns 1 if the exporter is up and running                                        | `f2b_up{system="hostname"} 1`                      |
 | `errors`                     | Count the number of errors since startup by type                                   |                                                     |
-| `errors{type="socket_conn"}` | Errors connecting to the fail2ban socket (e.g. connection refused)                 | `f2b_errors{type="socket_conn"} 0`                  |
-| `errors{type="socket_req"}`  | Errors sending requests to the fail2ban server (e.g. invalid responses)            | `f2b_errors{type="socket_req"} 0`                   |
-| `jail_count`                 | Number of jails configured in fail2ban                                             | `f2b_jail_count 2`                                  |
-| `jail_banned_current`        | Number of IPs currently banned per jail                                            | `f2b_jail_banned_current{jail="sshd"} 15`           |
-| `jail_banned_total`          | Total number of banned IPs since fail2ban startup per jail (includes expired bans) | `f2b_jail_banned_total{jail="sshd"} 31`             |
-| `jail_failed_current`        | Number of current failures per jail                                                | `f2b_jail_failed_current{jail="sshd"} 6`            |
-| `jail_failed_total`          | Total number of failures since fail2ban startup per jail                           | `f2b_jail_failed_total{jail="sshd"} 125`            |
-| `jail_config_ban_time`       | How long an IP is banned for in this jail (in seconds)                             | `f2b_config_jail_ban_time{jail="sshd"} 600`         |
-| `jail_config_find_time`      | How far back the filter will look for failures in this jail (in seconds)           | `f2b_config_jail_find_time{jail="sshd"} 600`        |
-| `jail_config_max_retry`      | The max number of failures allowed before banning an IP in this jail               | `f2b_config_jail_max_retries{jail="sshd"} 5`        |
-| `version`                    | Version string of the exporter and fail2ban                                        | `f2b_version{exporter="0.5.0",fail2ban="0.11.1"} 1` |
+| `errors{type="socket_conn"}` | Errors connecting to the fail2ban socket (e.g. connection refused)                 | `f2b_errors{type="socket_conn",system="hostname"} 0` |
+| `errors{type="socket_req"}`  | Errors sending requests to the fail2ban server (e.g. invalid responses)            | `f2b_errors{type="socket_req",system="hostname"} 0` |
+| `jail_count`                 | Number of jails configured in fail2ban                                             | `f2b_jail_count{system="hostname"} 2`               |
+| `jail_banned_current`        | Number of IPs currently banned per jail                                            | `f2b_jail_banned_current{jail="sshd",system="hostname"} 15` |
+| `jail_banned_total`          | Total number of banned IPs since fail2ban startup per jail (includes expired bans) | `f2b_jail_banned_total{jail="sshd",system="hostname"} 31` |
+| `jail_failed_current`        | Number of current failures per jail                                                | `f2b_jail_failed_current{jail="sshd",system="hostname"} 6` |
+| `jail_failed_total`          | Total number of failures since fail2ban startup per jail                           | `f2b_jail_failed_total{jail="sshd",system="hostname"} 125` |
+| `jail_config_ban_time`       | How long an IP is banned for in this jail (in seconds)                             | `f2b_config_jail_ban_time{jail="sshd",system="hostname"} 600` |
+| `jail_config_find_time`      | How far back the filter will look for failures in this jail (in seconds)           | `f2b_config_jail_find_time{jail="sshd",system="hostname"} 600` |
+| `jail_config_max_retry`      | The max number of failures allowed before banning an IP in this jail               | `f2b_config_jail_max_retries{jail="sshd",system="hostname"} 5` |
+| `banned_ip`                  | Currently banned IP address (value is 1 if banned)                                 | `f2b_banned_ip{jail="sshd",ip="1.2.3.4",system="hostname",city="New York",latitude="40.7128",longitude="-74.0060"} 1` |
+| `version`                    | Version string of the exporter and fail2ban                                        | `f2b_version{exporter="0.5.0",fail2ban="0.11.1",system="hostname"} 1` |
 
 The metrics above correspond to the matching fields in the `fail2ban-client status <jail>` command:
 ```
@@ -135,6 +131,12 @@ Flags:
                                       When set to true the exporter will immediately
                                       exit on a fail2ban socket connection error
                                       ($F2B_EXIT_ON_SOCKET_CONN_ERROR)
+      --geo.enabled                   Enable geo-tagging of banned IPs
+                                      ($F2B_GEO_ENABLED)
+      --geo.db-path=STRING            Path to MaxMind GeoLite2-City.mmdb database file
+                                      ($F2B_GEO_DB_PATH)
+      --geo.provider="maxmind"        Geo provider to use (default: maxmind)
+                                      ($F2B_GEO_PROVIDER)
       --collector.textfile.directory=STRING
                                       Directory to read text files with metrics from
                                       ($F2B_COLLECTOR_TEXT_PATH)
@@ -159,6 +161,9 @@ If both are specified, the CLI flag takes precedence.
 | `F2B_WEB_BASICAUTH_USER`        | `--web.basic-auth.username`                       |
 | `F2B_WEB_BASICAUTH_PASS`        | `--web.basic-auth.password`                       |
 | `F2B_EXIT_ON_SOCKET_CONN_ERROR` | `--collector.f2b.exit-on-socket-connection-error` |
+| `F2B_GEO_ENABLED`               | `--geo.enabled`                                   |
+| `F2B_GEO_DB_PATH`               | `--geo.db-path`                                   |
+| `F2B_GEO_PROVIDER`              | `--geo.provider`                                  |
 
 ## 4. Building from source
 
@@ -169,6 +174,34 @@ Building from source has the following dependencies:
 From there, simply run `make build`
 
 This will download the necessary dependencies and build a `fail2ban_exporter` binary in the root of the project.
+
+### 4.2. Geo-Tagging Setup
+
+To enable geo-tagging of banned IPs:
+
+1. Sign up for a free account at [MaxMind](https://www.maxmind.com/en/geolite2/signup)
+2. Download the GeoLite2-City database (MMDB format)
+3. Provide the path to the database file using `--geo.db-path` flag
+4. Enable geo-tagging with `--geo.enabled` flag
+
+Example:
+```bash
+fail2ban_exporter \
+  --collector.f2b.socket=/var/run/fail2ban/fail2ban.sock \
+  --geo.enabled \
+  --geo.db-path=/path/to/GeoLite2-City.mmdb
+```
+
+When geo-tagging is enabled, the `f2b_banned_ip` metric will include additional labels:
+- `city` - City name
+- `latitude` - Latitude coordinate
+- `longitude` - Longitude coordinate
+- `country` - Country name
+- `country_code` - ISO country code
+
+### 4.3. System Name Label
+
+All metrics now include a `system` label with the hostname of the machine running the exporter. This allows you to distinguish metrics from multiple exporters in a Prometheus setup.
 
 ## 5. Textfile metrics
 
@@ -203,7 +236,7 @@ docker run -d \
     -v /path/to/metrics:/app/metrics/:ro \
     -e F2B_COLLECTOR_TEXT_PATH=/app/metrics \
     -p "9191:9191" \
-    registry.gitlab.com/hctrdev/fail2ban-prometheus-exporter:latest
+    ghcr.io/Kvrnn/fail2ban-prometheus-exporter:latest
 ```
 
 ## 6. Troubleshooting
