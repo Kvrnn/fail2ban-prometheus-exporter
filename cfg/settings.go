@@ -1,6 +1,12 @@
 package cfg
 
-import "gitlab.com/hctrdev/fail2ban-prometheus-exporter/auth"
+import "github.com/Kvrnn/fail2ban-prometheus-exporter/auth"
+
+type GeoSettings struct {
+	Enabled  bool
+	DBPath   string
+	Provider string
+}
 
 type AppSettings struct {
 	VersionMode           bool
@@ -10,4 +16,5 @@ type AppSettings struct {
 	FileCollectorPath     string
 	AuthProvider          auth.AuthProvider
 	ExitOnSocketConnError bool
+	Geo                   GeoSettings
 }

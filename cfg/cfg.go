@@ -6,7 +6,7 @@ import (
 	"os"
 
 	"github.com/alecthomas/kong"
-	"gitlab.com/hctrdev/fail2ban-prometheus-exporter/auth"
+	"github.com/Kvrnn/fail2ban-prometheus-exporter/auth"
 )
 
 var cliStruct struct {
@@ -18,6 +18,9 @@ var cliStruct struct {
 	TextFileExporterPath string `name:"collector.textfile.directory" env:"F2B_COLLECTOR_TEXT_PATH" help:"Directory to read text files with metrics from"`
 	BasicAuthUser        string `name:"web.basic-auth.username" env:"F2B_WEB_BASICAUTH_USER" help:"Username to use to protect endpoints with basic auth"`
 	BasicAuthPass        string `name:"web.basic-auth.password" env:"F2B_WEB_BASICAUTH_PASS" help:"Password to use to protect endpoints with basic auth"`
+	GeoEnabled           bool   `name:"geo.enabled" env:"F2B_GEO_ENABLED" help:"Enable geo-tagging of banned IPs"`
+	GeoDBPath            string `name:"geo.db-path" env:"F2B_GEO_DB_PATH" help:"Path to MaxMind GeoLite2-City.mmdb database file"`
+	GeoProvider          string `name:"geo.provider" env:"F2B_GEO_PROVIDER" help:"Geo provider to use (default: maxmind)" default:"maxmind"`
 }
 
 func Parse() *AppSettings {
@@ -41,6 +44,11 @@ func Parse() *AppSettings {
 		FileCollectorPath:     cliStruct.TextFileExporterPath,
 		ExitOnSocketConnError: cliStruct.ExitOnSocketError,
 		AuthProvider:          createAuthProvider(),
+		Geo: GeoSettings{
+			Enabled:  cliStruct.GeoEnabled,
+			DBPath:   cliStruct.GeoDBPath,
+			Provider: cliStruct.GeoProvider,
+		},
 	}
 	return settings
 }
