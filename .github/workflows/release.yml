@@ -164,18 +164,63 @@ jobs:
         with:
           path: artifacts
     
-      - name: Create checksums
+      - name: Package binaries
         run: |
+          VERSION="${{ steps.get_version.outputs.version }}"
+          mkdir -p packages
           cd artifacts
+          
+          # Process each platform's artifacts
           for dir in */; do
             cd "$dir"
-            for file in *; do
-              if [ -f "$file" ]; then
-                sha256sum "$file" > "${file}.sha256"
+            PLATFORM=$(basename "$dir")
+            
+            # Determine OS and ARCH from directory name (e.g., "linux-amd64" or "windows-amd64")
+            if [[ "$PLATFORM" == linux-* ]]; then
+              OS="linux"
+              ARCH="${PLATFORM#linux-}"
+              BINARY="fail2ban_exporter"
+              EXT="tar.gz"
+            elif [[ "$PLATFORM" == windows-* ]]; then
+              OS="windows"
+              ARCH="${PLATFORM#windows-}"
+              BINARY="fail2ban_exporter.exe"
+              EXT="zip"
+            else
+              echo "Unknown platform: $PLATFORM"
+              cd ..
+              continue
+            fi
+            
+            # Create checksum for binary
+            if [ -f "$BINARY" ]; then
+              sha256sum "$BINARY" > "${BINARY}.sha256"
+              
+              # Create package with standard naming: fail2ban_exporter_VERSION_OS_ARCH.EXT
+              PACKAGE_NAME="fail2ban_exporter_${VERSION}_${OS}_${ARCH}.${EXT}"
+              
+              if [[ "$EXT" == "tar.gz" ]]; then
+                # Create tar.gz for Linux
+                tar -czf "../../packages/${PACKAGE_NAME}" "$BINARY" "${BINARY}.sha256"
+              else
+                # Create zip for Windows
+                zip "../../packages/${PACKAGE_NAME}" "$BINARY" "${BINARY}.sha256"
               fi
-            done
+              
+              # Create checksum for the package
+              cd ../../packages
+              sha256sum "${PACKAGE_NAME}" > "${PACKAGE_NAME}.sha256"
+              cd ../artifacts
+              
+              echo "Created package: ${PACKAGE_NAME}"
+            fi
+            
             cd ..
           done
+          
+          cd ..
+          echo "Packages created:"
+          ls -lh packages/
     
       - name: Create tag
         if: startsWith(github.ref, 'refs/heads/')
@@ -205,17 +250,18 @@ jobs:
             See [${{ steps.get_version.outputs.changelog }}](https://github.com/${{ github.repository }}/blob/${{ steps.get_version.outputs.ref }}/${{ steps.get_version.outputs.changelog }}) for details
             
             ### Downloads
-            - **Linux (amd64)**: `fail2ban_exporter`
-            - **Windows (amd64)**: `fail2ban_exporter.exe`
+            - **Linux (amd64)**: `fail2ban_exporter_${{ steps.get_version.outputs.version }}_linux_amd64.tar.gz`
+            - **Windows (amd64)**: `fail2ban_exporter_${{ steps.get_version.outputs.version }}_windows_amd64.zip`
             
             ### Installation
             ```bash
             # Linux
+            tar -xzf fail2ban_exporter_${{ steps.get_version.outputs.version }}_linux_amd64.tar.gz
             chmod +x fail2ban_exporter
             ./fail2ban_exporter --version
             ```
           files: |
-            artifacts/**/*
+            packages/*
           draft: false
           prerelease: ${{ steps.get_version.outputs.prerelease == 'true' }}
         env:
