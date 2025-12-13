@@ -116,10 +116,13 @@ jobs:
       (startsWith(github.ref, 'refs/heads/') && contains(github.ref_name, '.'))
     permissions:
       contents: write
+      id-token: write
     
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Fetch all history for tags
     
       - name: Get version from branch or tag
         id: get_version
@@ -174,9 +177,26 @@ jobs:
             cd ..
           done
     
+      - name: Create tag
+        if: startsWith(github.ref, 'refs/heads/')
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          TAG_NAME="v${{ steps.get_version.outputs.version }}"
+          # Fetch all tags to check if it exists
+          git fetch --tags
+          # Check if tag already exists locally or remotely
+          if git rev-parse "$TAG_NAME" >/dev/null 2>&1 || git ls-remote --tags origin "$TAG_NAME" | grep -q "$TAG_NAME"; then
+            echo "Tag $TAG_NAME already exists, skipping tag creation"
+          else
+            git tag -a "$TAG_NAME" -m "Release ${{ steps.get_version.outputs.version }}"
+            git push origin "$TAG_NAME"
+          fi
+    
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: v${{ steps.get_version.outputs.version }}
           name: Release ${{ steps.get_version.outputs.version }}
           body: |
             ## Release ${{ steps.get_version.outputs.version }}
