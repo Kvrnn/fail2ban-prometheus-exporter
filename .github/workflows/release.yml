@@ -170,9 +170,15 @@ jobs:
           mkdir -p packages
           cd artifacts
           
+          # Enable nullglob to prevent glob patterns from matching when there are no files
+          shopt -s nullglob
+          
           # Process each platform's artifacts
           for dir in */; do
-            cd "$dir"
+            # Skip if not a directory or if cd fails
+            [ -d "$dir" ] || continue
+            cd "$dir" || { echo "Failed to cd into $dir, skipping"; continue; }
+            
             PLATFORM=$(basename "$dir")
             
             # Determine OS and ARCH from directory name (e.g., "linux-amd64" or "windows-amd64")
@@ -187,7 +193,7 @@ jobs:
               BINARY="fail2ban_exporter.exe"
               EXT="zip"
             else
-              echo "Unknown platform: $PLATFORM"
+              echo "Unknown platform: $PLATFORM, skipping"
               cd ..
               continue
             fi
@@ -213,6 +219,8 @@ jobs:
               cd ../artifacts
               
               echo "Created package: ${PACKAGE_NAME}"
+            else
+              echo "Binary $BINARY not found in $PLATFORM, skipping"
             fi
             
             cd ..
@@ -220,7 +228,7 @@ jobs:
           
           cd ..
           echo "Packages created:"
-          ls -lh packages/
+          ls -lh packages/ || echo "No packages directory found"
     
       - name: Create tag
         if: startsWith(github.ref, 'refs/heads/')
