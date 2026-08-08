@@ -188,19 +188,15 @@ jobs:
         run: |
           VERSION="${{ steps.get_version.outputs.version }}"
           mkdir -p packages
-          cd artifacts
-          
+
           # Enable nullglob to prevent glob patterns from matching when there are no files
           shopt -s nullglob
-          
-          # Process each platform's artifacts
-          for dir in */; do
-            # Skip if not a directory or if cd fails
-            [ -d "$dir" ] || continue
-            cd "$dir" || { echo "Failed to cd into $dir, skipping"; continue; }
-            
+
+          # Process each platform's artifacts. Packaging runs in subshells so
+          # the working directory never drifts between loop iterations.
+          for dir in artifacts/*/; do
             PLATFORM=$(basename "$dir")
-            
+
             # Determine OS and ARCH from directory name (e.g., "linux-amd64" or "windows-amd64")
             if [[ "$PLATFORM" == linux-* ]]; then
               OS="linux"
@@ -214,41 +210,35 @@ jobs:
               EXT="zip"
             else
               echo "Unknown platform: $PLATFORM, skipping"
-              cd ..
               continue
             fi
-            
-            # Create checksum for binary
-            if [ -f "$BINARY" ]; then
+
+            if [ ! -f "$dir/$BINARY" ]; then
+              echo "Binary $BINARY not found in $PLATFORM, skipping"
+              continue
+            fi
+
+            # Create package with standard naming: fail2ban_exporter_VERSION_OS_ARCH.EXT
+            PACKAGE_NAME="fail2ban_exporter_${VERSION}_${OS}_${ARCH}.${EXT}"
+
+            (
+              cd "$dir"
               sha256sum "$BINARY" > "${BINARY}.sha256"
-              
-              # Create package with standard naming: fail2ban_exporter_VERSION_OS_ARCH.EXT
-              PACKAGE_NAME="fail2ban_exporter_${VERSION}_${OS}_${ARCH}.${EXT}"
-              
               if [[ "$EXT" == "tar.gz" ]]; then
-                # Create tar.gz for Linux
                 tar -czf "../../packages/${PACKAGE_NAME}" "$BINARY" "${BINARY}.sha256"
               else
-                # Create zip for Windows
                 zip "../../packages/${PACKAGE_NAME}" "$BINARY" "${BINARY}.sha256"
               fi
-              
-              # Create checksum for the package
-              cd ../../packages
-              sha256sum "${PACKAGE_NAME}" > "${PACKAGE_NAME}.sha256"
-              cd ../artifacts
-              
-              echo "Created package: ${PACKAGE_NAME}"
-            else
-              echo "Binary $BINARY not found in $PLATFORM, skipping"
-            fi
-            
-            cd ..
+            )
+
+            # Create checksum for the package
+            ( cd packages && sha256sum "${PACKAGE_NAME}" > "${PACKAGE_NAME}.sha256" )
+
+            echo "Created package: ${PACKAGE_NAME}"
           done
-          
-          cd ..
+
           echo "Packages created:"
-          ls -lh packages/ || echo "No packages directory found"
+          ls -lh packages/
     
       - name: Create tag
         if: startsWith(github.ref, 'refs/heads/')
