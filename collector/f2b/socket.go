@@ -3,7 +3,7 @@ package f2b
 import (
 	"log"
 
-	"github.com/Kvrnn/fail2ban-prometheus-exporter/socket"
+	"github.com/NightSquawk/fail2ban-prometheus-exporter/socket"
 	"github.com/prometheus/client_golang/prometheus"
 )
 
@@ -11,75 +11,218 @@ const (
 	namespace = "f2b"
 )
 
+// getCustomerLabels returns customer labels in the order: customer_id, customer_name, tenant_id
+func getCustomerLabels(customerID, customerName, tenantID string) []string {
+	return []string{customerID, customerName, tenantID}
+}
+
 var (
 	metricErrorCount = prometheus.NewDesc(
 		prometheus.BuildFQName(namespace, "", "errors"),
 		"Number of errors found since startup",
-		[]string{"type", "system"}, nil,
+		[]string{"type", "system", "customer_id", "customer_name", "tenant_id"}, nil,
 	)
 	metricServerUp = prometheus.NewDesc(
 		prometheus.BuildFQName(namespace, "", "up"),
 		"Check if the fail2ban server is up",
-		[]string{"system"}, nil,
+		[]string{"system", "customer_id", "customer_name", "tenant_id"}, nil,
 	)
 	metricJailCount = prometheus.NewDesc(
 		prometheus.BuildFQName(namespace, "", "jail_count"),
 		"Number of defined jails",
-		[]string{"system"}, nil,
+		[]string{"system", "customer_id", "customer_name", "tenant_id"}, nil,
 	)
 	metricJailFailedCurrent = prometheus.NewDesc(
 		prometheus.BuildFQName(namespace, "", "jail_failed_current"),
 		"Number of current failures on this jail's filter",
-		[]string{"jail", "system"}, nil,
+		[]string{"jail", "system", "customer_id", "customer_name", "tenant_id"}, nil,
 	)
 	metricJailFailedTotal = prometheus.NewDesc(
 		prometheus.BuildFQName(namespace, "", "jail_failed_total"),
 		"Number of total failures on this jail's filter",
-		[]string{"jail", "system"}, nil,
+		[]string{"jail", "system", "customer_id", "customer_name", "tenant_id"}, nil,
 	)
 	metricJailBannedCurrent = prometheus.NewDesc(
 		prometheus.BuildFQName(namespace, "", "jail_banned_current"),
 		"Number of IPs currently banned in this jail",
-		[]string{"jail", "system"}, nil,
+		[]string{"jail", "system", "customer_id", "customer_name", "tenant_id"}, nil,
 	)
 	metricJailBannedTotal = prometheus.NewDesc(
 		prometheus.BuildFQName(namespace, "", "jail_banned_total"),
 		"Total number of IPs banned by this jail (includes expired bans)",
-		[]string{"jail", "system"}, nil,
+		[]string{"jail", "system", "customer_id", "customer_name", "tenant_id"}, nil,
 	)
 	metricJailBanTime = prometheus.NewDesc(
 		prometheus.BuildFQName(namespace, "config", "jail_ban_time"),
 		"How long an IP is banned for in this jail (in seconds)",
-		[]string{"jail", "system"}, nil,
+		[]string{"jail", "system", "customer_id", "customer_name", "tenant_id"}, nil,
 	)
 	metricJailFindTime = prometheus.NewDesc(
 		prometheus.BuildFQName(namespace, "config", "jail_find_time"),
 		"How far back will the filter look for failures in this jail (in seconds)",
-		[]string{"jail", "system"}, nil,
+		[]string{"jail", "system", "customer_id", "customer_name", "tenant_id"}, nil,
 	)
 	metricJailMaxRetry = prometheus.NewDesc(
 		prometheus.BuildFQName(namespace, "config", "jail_max_retries"),
 		"The number of failures allowed until the IP is banned by this jail",
-		[]string{"jail", "system"}, nil,
+		[]string{"jail", "system", "customer_id", "customer_name", "tenant_id"}, nil,
 	)
 	metricVersionInfo = prometheus.NewDesc(
 		prometheus.BuildFQName(namespace, "", "version"),
 		"Version of the exporter and fail2ban server",
-		[]string{"exporter", "fail2ban", "system"}, nil,
+		[]string{"exporter", "fail2ban", "system", "customer_id", "customer_name", "tenant_id"}, nil,
 	)
 	metricBannedIP = prometheus.NewDesc(
 		prometheus.BuildFQName(namespace, "", "banned_ip"),
 		"Currently banned IP address (value is 1 if banned, 0 otherwise)",
-		[]string{"jail", "ip", "system", "city", "latitude", "longitude", "country", "country_code"}, nil,
+		[]string{"jail", "ip", "system", "city", "latitude", "longitude", "country", "country_code", "customer_id", "customer_name", "tenant_id"}, nil,
+	)
+	metricBanDurationRemaining = prometheus.NewDesc(
+		prometheus.BuildFQName(namespace, "", "ban_duration_remaining_seconds"),
+		"Time remaining until ban expires in seconds",
+		[]string{"jail", "ip", "system", "customer_id", "customer_name", "tenant_id"}, nil,
+	)
+	metricBanAge = prometheus.NewDesc(
+		prometheus.BuildFQName(namespace, "", "ban_age_seconds"),
+		"How long an IP has been banned in seconds",
+		[]string{"jail", "ip", "system", "customer_id", "customer_name", "tenant_id"}, nil,
+	)
+	metricBanExpiry = prometheus.NewDesc(
+		prometheus.BuildFQName(namespace, "", "ban_expiry_timestamp"),
+		"Unix timestamp when ban expires",
+		[]string{"jail", "ip", "system", "customer_id", "customer_name", "tenant_id"}, nil,
+	)
+	metricCollectionDuration = prometheus.NewDesc(
+		prometheus.BuildFQName(namespace, "", "collection_duration_seconds"),
+		"Time taken to complete metric collection in seconds",
+		[]string{"system", "customer_id", "customer_name", "tenant_id"}, nil,
+	)
+	metricDatabaseQueryDuration = prometheus.NewDesc(
+		prometheus.BuildFQName(namespace, "", "database_query_duration_seconds"),
+		"Database query performance in seconds",
+		[]string{"query_type", "system", "customer_id", "customer_name", "tenant_id"}, nil,
+	)
+	metricGeoLookupDuration = prometheus.NewDesc(
+		prometheus.BuildFQName(namespace, "", "geo_lookup_duration_seconds"),
+		"Geo lookup performance in seconds",
+		[]string{"system", "customer_id", "customer_name", "tenant_id"}, nil,
+	)
+	metricMetricsExported = prometheus.NewDesc(
+		prometheus.BuildFQName(namespace, "", "metrics_exported_total"),
+		"Total number of metrics exported per collection",
+		[]string{"system", "customer_id", "customer_name", "tenant_id"}, nil,
+	)
+	metricCollectionErrors = prometheus.NewDesc(
+		prometheus.BuildFQName(namespace, "", "collection_errors_total"),
+		"Errors encountered during collection",
+		[]string{"system", "customer_id", "customer_name", "tenant_id"}, nil,
+	)
+	metricBanHistoryTotal = prometheus.NewDesc(
+		prometheus.BuildFQName(namespace, "", "ban_history_total"),
+		"Total bans ever recorded (including expired)",
+		[]string{"system", "customer_id", "customer_name", "tenant_id"}, nil,
+	)
+	metricIPBanCountTotal = prometheus.NewDesc(
+		prometheus.BuildFQName(namespace, "", "ip_ban_count_total"),
+		"Total times an IP has been banned (across all jails)",
+		[]string{"ip", "system", "customer_id", "customer_name", "tenant_id"}, nil,
+	)
+	metricIPFirstSeen = prometheus.NewDesc(
+		prometheus.BuildFQName(namespace, "", "ip_first_seen_timestamp"),
+		"First time IP was banned (Unix timestamp)",
+		[]string{"ip", "system", "customer_id", "customer_name", "tenant_id"}, nil,
+	)
+	metricIPLastSeen = prometheus.NewDesc(
+		prometheus.BuildFQName(namespace, "", "ip_last_seen_timestamp"),
+		"Most recent ban time (Unix timestamp)",
+		[]string{"ip", "system", "customer_id", "customer_name", "tenant_id"}, nil,
+	)
+	metricRepeatOffender = prometheus.NewDesc(
+		prometheus.BuildFQName(namespace, "", "repeat_offender"),
+		"Boolean flag (1 if banned multiple times, 0 otherwise)",
+		[]string{"ip", "system", "customer_id", "customer_name", "tenant_id"}, nil,
+	)
+	metricAttacksByCountry = prometheus.NewDesc(
+		prometheus.BuildFQName(namespace, "", "attacks_by_country_total"),
+		"Total attacks by country code",
+		[]string{"country_code", "country", "system", "customer_id", "customer_name", "tenant_id"}, nil,
+	)
+	metricAttacksByCity = prometheus.NewDesc(
+		prometheus.BuildFQName(namespace, "", "attacks_by_city_total"),
+		"Total attacks by city",
+		[]string{"city", "country_code", "country", "system", "customer_id", "customer_name", "tenant_id"}, nil,
+	)
+	metricTopAttackCountries = prometheus.NewDesc(
+		prometheus.BuildFQName(namespace, "", "top_attack_countries"),
+		"Top N attacking countries (gauge with rank)",
+		[]string{"country_code", "country", "rank", "system", "customer_id", "customer_name", "tenant_id"}, nil,
+	)
+	metricGeographicAttackRate = prometheus.NewDesc(
+		prometheus.BuildFQName(namespace, "", "geographic_attack_rate"),
+		"Attacks per country per hour",
+		[]string{"country_code", "country", "system", "customer_id", "customer_name", "tenant_id"}, nil,
+	)
+	metricAttackPatternType = prometheus.NewDesc(
+		prometheus.BuildFQName(namespace, "", "attack_pattern_type"),
+		"Number of attack patterns of this type detected per jail",
+		[]string{"pattern_type", "jail", "system", "customer_id", "customer_name", "tenant_id"}, nil,
+	)
+	metricAttacksByHour = prometheus.NewDesc(
+		prometheus.BuildFQName(namespace, "", "attacks_by_hour"),
+		"Attack distribution by hour of day (0-23)",
+		[]string{"hour", "system", "customer_id", "customer_name", "tenant_id"}, nil,
+	)
+	metricAttacksByDayOfWeek = prometheus.NewDesc(
+		prometheus.BuildFQName(namespace, "", "attacks_by_day_of_week"),
+		"Attack distribution by day of week (0-6, Sunday=0)",
+		[]string{"day", "system", "customer_id", "customer_name", "tenant_id"}, nil,
+	)
+	metricAttackVelocity = prometheus.NewDesc(
+		prometheus.BuildFQName(namespace, "", "attack_velocity"),
+		"Attacks per hour for recent time window",
+		[]string{"system", "customer_id", "customer_name", "tenant_id"}, nil,
+	)
+	metricSuspiciousPatternScore = prometheus.NewDesc(
+		prometheus.BuildFQName(namespace, "", "suspicious_pattern_score"),
+		"Score indicating suspicious activity (0-100)",
+		[]string{"system", "customer_id", "customer_name", "tenant_id"}, nil,
+	)
+	metricAlertHighBanRate = prometheus.NewDesc(
+		prometheus.BuildFQName(namespace, "", "alert_high_ban_rate"),
+		"1 if ban rate exceeds threshold, 0 otherwise",
+		[]string{"system", "customer_id", "customer_name", "tenant_id"}, nil,
+	)
+	metricAlertNewCountryAttack = prometheus.NewDesc(
+		prometheus.BuildFQName(namespace, "", "alert_new_country_attack"),
+		"1 if attack from new country detected, 0 otherwise",
+		[]string{"country_code", "system", "customer_id", "customer_name", "tenant_id"}, nil,
+	)
+	metricAlertCoordinatedAttack = prometheus.NewDesc(
+		prometheus.BuildFQName(namespace, "", "alert_coordinated_attack"),
+		"1 if multiple IPs from same country attacking same jail, 0 otherwise",
+		[]string{"jail", "country_code", "system", "customer_id", "customer_name", "tenant_id"}, nil,
+	)
+	metricAlertJailInactive = prometheus.NewDesc(
+		prometheus.BuildFQName(namespace, "", "alert_jail_inactive"),
+		"1 if jail has no activity but should, 0 otherwise",
+		[]string{"jail", "system", "customer_id", "customer_name", "tenant_id"}, nil,
+	)
+	metricAlertRepeatOffenderSpike = prometheus.NewDesc(
+		prometheus.BuildFQName(namespace, "", "alert_repeat_offender_spike"),
+		"1 if repeat offenders increase significantly, 0 otherwise",
+		[]string{"system", "customer_id", "customer_name", "tenant_id"}, nil,
 	)
 )
 
 func (c *Collector) collectErrorCountMetric(ch chan<- prometheus.Metric) {
+	customerLabels := getCustomerLabels(c.customerID, c.customerName, c.tenantID)
 	ch <- prometheus.MustNewConstMetric(
-		metricErrorCount, prometheus.CounterValue, float64(c.socketConnectionErrorCount), "socket_conn", c.hostname,
+		metricErrorCount, prometheus.CounterValue, float64(c.socketConnectionErrorCount),
+		append([]string{"socket_conn", c.hostname}, customerLabels...)...,
 	)
 	ch <- prometheus.MustNewConstMetric(
-		metricErrorCount, prometheus.CounterValue, float64(c.socketRequestErrorCount), "socket_req", c.hostname,
+		metricErrorCount, prometheus.CounterValue, float64(c.socketRequestErrorCount),
+		append([]string{"socket_req", c.hostname}, customerLabels...)...,
 	)
 }
 
@@ -95,8 +238,10 @@ func (c *Collector) collectServerUpMetric(ch chan<- prometheus.Metric, s *socket
 			serverUp = 1
 		}
 	}
+	customerLabels := getCustomerLabels(c.customerID, c.customerName, c.tenantID)
 	ch <- prometheus.MustNewConstMetric(
-		metricServerUp, prometheus.GaugeValue, serverUp, c.hostname,
+		metricServerUp, prometheus.GaugeValue, serverUp,
+		append([]string{c.hostname}, customerLabels...)...,
 	)
 }
 
@@ -110,8 +255,10 @@ func (c *Collector) collectJailMetrics(ch chan<- prometheus.Metric, s *socket.Fa
 	if err == nil {
 		count = float64(len(jails))
 	}
+	customerLabels := getCustomerLabels(c.customerID, c.customerName, c.tenantID)
 	ch <- prometheus.MustNewConstMetric(
-		metricJailCount, prometheus.GaugeValue, count, c.hostname,
+		metricJailCount, prometheus.GaugeValue, count,
+		append([]string{c.hostname}, customerLabels...)...,
 	)
 
 	for i := range jails {
@@ -128,28 +275,35 @@ func (c *Collector) collectJailStatsMetric(ch chan<- prometheus.Metric, s *socke
 		return
 	}
 
+	customerLabels := getCustomerLabels(c.customerID, c.customerName, c.tenantID)
 	ch <- prometheus.MustNewConstMetric(
-		metricJailFailedCurrent, prometheus.GaugeValue, float64(stats.FailedCurrent), jail, c.hostname,
+		metricJailFailedCurrent, prometheus.GaugeValue, float64(stats.FailedCurrent),
+		append([]string{jail, c.hostname}, customerLabels...)...,
 	)
 	ch <- prometheus.MustNewConstMetric(
-		metricJailFailedTotal, prometheus.GaugeValue, float64(stats.FailedTotal), jail, c.hostname,
+		metricJailFailedTotal, prometheus.GaugeValue, float64(stats.FailedTotal),
+		append([]string{jail, c.hostname}, customerLabels...)...,
 	)
 	ch <- prometheus.MustNewConstMetric(
-		metricJailBannedCurrent, prometheus.GaugeValue, float64(stats.BannedCurrent), jail, c.hostname,
+		metricJailBannedCurrent, prometheus.GaugeValue, float64(stats.BannedCurrent),
+		append([]string{jail, c.hostname}, customerLabels...)...,
 	)
 	ch <- prometheus.MustNewConstMetric(
-		metricJailBannedTotal, prometheus.GaugeValue, float64(stats.BannedTotal), jail, c.hostname,
+		metricJailBannedTotal, prometheus.GaugeValue, float64(stats.BannedTotal),
+		append([]string{jail, c.hostname}, customerLabels...)...,
 	)
 }
 
 func (c *Collector) collectJailConfigMetrics(ch chan<- prometheus.Metric, s *socket.Fail2BanSocket, jail string) {
+	customerLabels := getCustomerLabels(c.customerID, c.customerName, c.tenantID)
 	banTime, err := s.GetJailBanTime(jail)
 	if err != nil {
 		c.socketRequestErrorCount++
 		log.Printf("failed to get ban time for jail %s: %v", jail, err)
 	} else {
 		ch <- prometheus.MustNewConstMetric(
-			metricJailBanTime, prometheus.GaugeValue, float64(banTime), jail, c.hostname,
+			metricJailBanTime, prometheus.GaugeValue, float64(banTime),
+			append([]string{jail, c.hostname}, customerLabels...)...,
 		)
 	}
 	findTime, err := s.GetJailFindTime(jail)
@@ -158,7 +312,8 @@ func (c *Collector) collectJailConfigMetrics(ch chan<- prometheus.Metric, s *soc
 		log.Printf("failed to get find time for jail %s: %v", jail, err)
 	} else {
 		ch <- prometheus.MustNewConstMetric(
-			metricJailFindTime, prometheus.GaugeValue, float64(findTime), jail, c.hostname,
+			metricJailFindTime, prometheus.GaugeValue, float64(findTime),
+			append([]string{jail, c.hostname}, customerLabels...)...,
 		)
 	}
 	maxRetry, err := s.GetJailMaxRetries(jail)
@@ -167,7 +322,8 @@ func (c *Collector) collectJailConfigMetrics(ch chan<- prometheus.Metric, s *soc
 		log.Printf("failed to get max retries for jail %s: %v", jail, err)
 	} else {
 		ch <- prometheus.MustNewConstMetric(
-			metricJailMaxRetry, prometheus.GaugeValue, float64(maxRetry), jail, c.hostname,
+			metricJailMaxRetry, prometheus.GaugeValue, float64(maxRetry),
+			append([]string{jail, c.hostname}, customerLabels...)...,
 		)
 	}
 }
@@ -179,7 +335,9 @@ func (c *Collector) collectVersionMetric(ch chan<- prometheus.Metric, s *socket.
 		log.Printf("failed to get fail2ban server version: %v", err)
 	}
 
+	customerLabels := getCustomerLabels(c.customerID, c.customerName, c.tenantID)
 	ch <- prometheus.MustNewConstMetric(
-		metricVersionInfo, prometheus.GaugeValue, float64(1), c.exporterVersion, fail2banVersion, c.hostname,
+		metricVersionInfo, prometheus.GaugeValue, float64(1),
+		append([]string{c.exporterVersion, fail2banVersion, c.hostname}, customerLabels...)...,
 	)
 }
