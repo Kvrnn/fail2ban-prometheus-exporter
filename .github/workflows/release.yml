@@ -12,10 +12,30 @@ on:
   workflow_dispatch:
 
 jobs:
+  test:
+    name: Run tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+
+      - name: Run tests
+        run: go test ./...
+
+      - name: Run vet
+        run: go vet ./...
+
   build:
     name: Build binaries
+    needs: test
     runs-on: ubuntu-latest
-    
+
     strategy:
       matrix:
         include:
@@ -170,9 +190,6 @@ jobs:
           mkdir -p packages
           cd artifacts
           
-          echo "Artifacts directory structure:"
-          ls -la
-          
           # Enable nullglob to prevent glob patterns from matching when there are no files
           shopt -s nullglob
           
@@ -183,8 +200,6 @@ jobs:
             cd "$dir" || { echo "Failed to cd into $dir, skipping"; continue; }
             
             PLATFORM=$(basename "$dir")
-            echo "Processing platform: $PLATFORM"
-            ls -la
             
             # Determine OS and ARCH from directory name (e.g., "linux-amd64" or "windows-amd64")
             if [[ "$PLATFORM" == linux-* ]]; then
@@ -205,7 +220,6 @@ jobs:
             
             # Create checksum for binary
             if [ -f "$BINARY" ]; then
-              echo "Found binary: $BINARY"
               sha256sum "$BINARY" > "${BINARY}.sha256"
               
               # Create package with standard naming: fail2ban_exporter_VERSION_OS_ARCH.EXT
@@ -213,15 +227,9 @@ jobs:
               
               if [[ "$EXT" == "tar.gz" ]]; then
                 # Create tar.gz for Linux
-                echo "Creating tar.gz package: ${PACKAGE_NAME}"
                 tar -czf "../../packages/${PACKAGE_NAME}" "$BINARY" "${BINARY}.sha256"
               else
-                # Create zip for Windows (ensure zip is available)
-                echo "Creating zip package: ${PACKAGE_NAME}"
-                if ! command -v zip &> /dev/null; then
-                  echo "zip command not found, installing..."
-                  apt-get update && apt-get install -y zip
-                fi
+                # Create zip for Windows
                 zip "../../packages/${PACKAGE_NAME}" "$BINARY" "${BINARY}.sha256"
               fi
               
@@ -230,7 +238,7 @@ jobs:
               sha256sum "${PACKAGE_NAME}" > "${PACKAGE_NAME}.sha256"
               cd ../artifacts
               
-              echo "Successfully created package: ${PACKAGE_NAME}"
+              echo "Created package: ${PACKAGE_NAME}"
             else
               echo "Binary $BINARY not found in $PLATFORM, skipping"
             fi
@@ -239,16 +247,8 @@ jobs:
           done
           
           cd ..
-          echo "All packages created:"
+          echo "Packages created:"
           ls -lh packages/ || echo "No packages directory found"
-          
-          # Verify only expected package files exist
-          echo "Verifying package files:"
-          for file in packages/*; do
-            if [ -f "$file" ]; then
-              echo "  - $(basename "$file")"
-            fi
-          done
     
       - name: Create tag
         if: startsWith(github.ref, 'refs/heads/')

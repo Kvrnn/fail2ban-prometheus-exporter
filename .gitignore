@@ -7,3 +7,5 @@ dist/
 
 fail2ban_exporter
 fail2ban_exporter.exe
+
+.ignore/
