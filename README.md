@@ -28,7 +28,7 @@ $ fail2ban_exporter --collector.f2b.socket=/var/run/fail2ban/fail2ban.sock --web
 2022/02/20 09:54:06 ready
 ```
 
-Binary files for each release can be found on the [releases](https://github.com/Kvrnn/fail2ban-prometheus-exporter/releases) page.
+Binary files for each release can be found on the [releases](https://github.com/NightSquawk/fail2ban-prometheus-exporter/releases) page.
 
 There is also an [example systemd service file](/_examples/systemd/fail2ban_exporter.service) included in the repository.
 This is a starting point to run the exporter as a service.
@@ -41,7 +41,7 @@ docker run -d \
     --name "fail2ban-exporter" \
     -v /var/run/fail2ban:/var/run/fail2ban:ro \
     -p "9191:9191" \
-    ghcr.io/Kvrnn/fail2ban-prometheus-exporter:latest
+    ghcr.io/NightSquawk/fail2ban-prometheus-exporter:latest
 ```
 
 **Docker compose**
@@ -50,7 +50,7 @@ docker run -d \
 version: "2"
 services:
   exporter:
-    image: ghcr.io/Kvrnn/fail2ban-prometheus-exporter:latest
+    image: ghcr.io/NightSquawk/fail2ban-prometheus-exporter:latest
     volumes:
     - /var/run/fail2ban/:/var/run/fail2ban:ro
     ports:
@@ -108,6 +108,36 @@ The dashboard supports displaying data from multiple exporters. Use the `instanc
 
 *(Sample dashboard is compatible with Grafana `9.1.8` and above)*
 
+### 2.2. Extended metrics
+
+Beyond the standard socket-based metrics, the exporter can export several extra metric families.
+
+**Database-backed metrics** (require `--collector.f2b.database`, off by default):
+
+| Family | Metrics | Labels |
+|--------|---------|--------|
+| Time-based | `ban_duration_remaining_seconds`, `ban_age_seconds`, `ban_expiry_timestamp` | `jail`, `ip` |
+| Historical | `ban_history_total`, `ip_ban_count_total`, `ip_first_seen_timestamp`, `ip_last_seen_timestamp`, `repeat_offender` | `ip` |
+| Attack patterns | `attack_pattern_type`, `attacks_by_hour`, `attacks_by_day_of_week`, `attack_velocity`, `suspicious_pattern_score` | `pattern_type`, `jail`, `hour`, `day` |
+| Alerts | `alert_high_ban_rate`, `alert_new_country_attack`, `alert_coordinated_attack`, `alert_jail_inactive`, `alert_repeat_offender_spike` | `jail`, `country_code` |
+
+Attack patterns are heuristic: `brute_force` (3+ bans of the same IP in a jail within 48h), `port_scan` (5+ IPs banned in the same jail), and `distributed` (bans from 3+ countries in the same jail, requires geo). Alert gauges flip to 1 when the corresponding `--alert.*` threshold is crossed.
+
+**Geographic aggregates** (require `--geo.enabled`): `attacks_by_country_total`, `attacks_by_city_total`, `top_attack_countries`, `geographic_attack_rate`.
+
+**Collector self-metrics**: `collection_duration_seconds`, `database_query_duration_seconds`, `geo_lookup_duration_seconds`, `metrics_exported_total`, `collection_errors_total`.
+
+**Multi-tenant labels**: every metric carries `customer_id`, `customer_name`, and `tenant_id` labels (empty strings unless set with the `--customer.*`/`--tenant.id` flags).
+
+### 2.3. Cardinality and scrape cost
+
+Per-IP metric families (`banned_ip`, the time-based family, and the historical family) create one time series per banned IP and are unbounded on busy hosts. Two safeguards apply:
+
+- `--collector.f2b.max-ip-metrics` (default `500`) caps each per-IP family at the N most recent entries; set to `0` to disable the cap. Truncation is logged. Aggregate metrics (jail counts, `ban_history_total`, per-country totals) always reflect the full data set.
+- `--collector.f2b.database-cache-ttl` (default `60` seconds) caches the fail2ban database query results, so a 15s Prometheus scrape interval does not run full-table SQLite scans on every scrape. Set to `0` to query on every scrape.
+
+Database-backed metrics are **opt-in**: the exporter only opens the fail2ban database when `--collector.f2b.database` is set explicitly (the standard fail2ban path is `/var/lib/fail2ban/fail2ban.sqlite3`). If the database cannot be opened, the exporter logs a warning and continues with socket-based metrics only.
+
 ## 3. Configuration
 
 The exporter is configured with CLI flags and environment variables.
@@ -127,6 +157,18 @@ Flags:
       --collector.f2b.socket="/var/run/fail2ban/fail2ban.sock"
                                       Path to the fail2ban server socket
                                       ($F2B_COLLECTOR_SOCKET)
+      --collector.f2b.database=STRING
+                                      Path to the fail2ban SQLite database (e.g.
+                                      /var/lib/fail2ban/fail2ban.sqlite3). Empty disables
+                                      database-backed metrics ($F2B_COLLECTOR_DATABASE)
+      --collector.f2b.max-ip-metrics=500
+                                      Maximum number of per-IP series to export per metric
+                                      family, most recent first (0 = unlimited)
+                                      ($F2B_COLLECTOR_MAX_IP_METRICS)
+      --collector.f2b.database-cache-ttl=60
+                                      Seconds to cache fail2ban database query results
+                                      between scrapes (0 = query on every scrape)
+                                      ($F2B_COLLECTOR_DATABASE_CACHE_TTL)
       --collector.f2b.exit-on-socket-connection-error
                                       When set to true the exporter will immediately
                                       exit on a fail2ban socket connection error
@@ -137,6 +179,19 @@ Flags:
                                       ($F2B_GEO_DB_PATH)
       --geo.provider="maxmind"        Geo provider to use (default: maxmind)
                                       ($F2B_GEO_PROVIDER)
+      --customer.id=STRING            Customer identifier for multi-tenant support
+                                      ($F2B_CUSTOMER_ID)
+      --customer.name=STRING          Customer name for multi-tenant support
+                                      ($F2B_CUSTOMER_NAME)
+      --tenant.id=STRING              Tenant identifier for multi-tenant support
+                                      ($F2B_TENANT_ID)
+      --alert.ban-rate-threshold=10   Ban rate threshold (bans per minute) for high ban
+                                      rate alert ($F2B_ALERT_BAN_RATE_THRESHOLD)
+      --alert.coordinated-min-ips=5   Minimum number of IPs for coordinated attack alert
+                                      ($F2B_ALERT_COORDINATED_MIN_IPS)
+      --alert.jail-inactivity-hours=24
+                                      Hours of inactivity before jail inactivity alert
+                                      ($F2B_ALERT_JAIL_INACTIVITY_HOURS)
       --collector.textfile.directory=STRING
                                       Directory to read text files with metrics from
                                       ($F2B_COLLECTOR_TEXT_PATH)
@@ -156,6 +211,9 @@ If both are specified, the CLI flag takes precedence.
 | Environment variable            | Corresponding CLI flag                            |
 |---------------------------------|---------------------------------------------------|
 | `F2B_COLLECTOR_SOCKET`          | `--collector.f2b.socket`                          |
+| `F2B_COLLECTOR_DATABASE`        | `--collector.f2b.database`                        |
+| `F2B_COLLECTOR_MAX_IP_METRICS`  | `--collector.f2b.max-ip-metrics`                  |
+| `F2B_COLLECTOR_DATABASE_CACHE_TTL` | `--collector.f2b.database-cache-ttl`           |
 | `F2B_COLLECTOR_TEXT_PATH`       | `--collector.textfile.directory`                  |
 | `F2B_WEB_LISTEN_ADDRESS`        | `--web.listen-address`                            |
 | `F2B_WEB_BASICAUTH_USER`        | `--web.basic-auth.username`                       |
@@ -164,6 +222,12 @@ If both are specified, the CLI flag takes precedence.
 | `F2B_GEO_ENABLED`               | `--geo.enabled`                                   |
 | `F2B_GEO_DB_PATH`               | `--geo.db-path`                                   |
 | `F2B_GEO_PROVIDER`              | `--geo.provider`                                  |
+| `F2B_CUSTOMER_ID`               | `--customer.id`                                   |
+| `F2B_CUSTOMER_NAME`             | `--customer.name`                                 |
+| `F2B_TENANT_ID`                 | `--tenant.id`                                     |
+| `F2B_ALERT_BAN_RATE_THRESHOLD`  | `--alert.ban-rate-threshold`                      |
+| `F2B_ALERT_COORDINATED_MIN_IPS` | `--alert.coordinated-min-ips`                     |
+| `F2B_ALERT_JAIL_INACTIVITY_HOURS` | `--alert.jail-inactivity-hours`                 |
 
 ## 4. Building from source
 
@@ -236,7 +300,7 @@ docker run -d \
     -v /path/to/metrics:/app/metrics/:ro \
     -e F2B_COLLECTOR_TEXT_PATH=/app/metrics \
     -p "9191:9191" \
-    ghcr.io/Kvrnn/fail2ban-prometheus-exporter:latest
+    ghcr.io/NightSquawk/fail2ban-prometheus-exporter:latest
 ```
 
 ## 6. Troubleshooting
