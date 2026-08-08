@@ -1,0 +1,14 @@
+# Normalize line endings: the repo is synced across Linux and Windows
+# (Syncthing) and CRLF churn was polluting every diff.
+* text=auto
+*.go text eol=lf
+*.md text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.json text eol=lf
+*.sh text eol=lf
+*.service text eol=lf
+Makefile text eol=lf
+Dockerfile* text eol=lf
+*.png binary
+*.sqlite3 binary
