@@ -4,8 +4,8 @@ import (
 	"log"
 	"net/http"
 
-	"github.com/Kvrnn/fail2ban-prometheus-exporter/collector/f2b"
-	"github.com/Kvrnn/fail2ban-prometheus-exporter/collector/textfile"
+	"github.com/NightSquawk/fail2ban-prometheus-exporter/collector/f2b"
+	"github.com/NightSquawk/fail2ban-prometheus-exporter/collector/textfile"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 

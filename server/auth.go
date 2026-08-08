@@ -3,7 +3,7 @@ package server
 import (
 	"net/http"
 
-	"github.com/Kvrnn/fail2ban-prometheus-exporter/auth"
+	"github.com/NightSquawk/fail2ban-prometheus-exporter/auth"
 )
 
 func AuthMiddleware(handlerFunc http.HandlerFunc, authProvider auth.AuthProvider) http.HandlerFunc {

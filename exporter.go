@@ -7,10 +7,10 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/Kvrnn/fail2ban-prometheus-exporter/cfg"
-	"github.com/Kvrnn/fail2ban-prometheus-exporter/collector/f2b"
-	"github.com/Kvrnn/fail2ban-prometheus-exporter/collector/textfile"
-	"github.com/Kvrnn/fail2ban-prometheus-exporter/server"
+	"github.com/NightSquawk/fail2ban-prometheus-exporter/cfg"
+	"github.com/NightSquawk/fail2ban-prometheus-exporter/collector/f2b"
+	"github.com/NightSquawk/fail2ban-prometheus-exporter/collector/textfile"
+	"github.com/NightSquawk/fail2ban-prometheus-exporter/server"
 	"github.com/prometheus/client_golang/prometheus"
 )
 

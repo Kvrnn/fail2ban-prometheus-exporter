@@ -3,7 +3,7 @@ package textfile
 import (
 	"log"
 
-	"github.com/Kvrnn/fail2ban-prometheus-exporter/cfg"
+	"github.com/NightSquawk/fail2ban-prometheus-exporter/cfg"
 	"github.com/prometheus/client_golang/prometheus"
 )
 
